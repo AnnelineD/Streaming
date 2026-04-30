@@ -180,8 +180,6 @@ class TrieExecution:
 
         for e, clause in enumerate(formula.clauses):
             ps = list(clause.P)
-            # s1.to(s1, *(srcs[ps[0]] == srcs[q] for q in ps), *(OpOrNot(">=", srcs[v], srcs[ps[0]]) for v in formula.vars().difference(ps).difference(clause.N)), *(OpOrNot(">", srcs[n], srcs[ps[0]]) for n in clause.N), active=tuple(srcs[p] for p in ps), push=((r, srcs[ps[0]]), ), pull=tuple(srcs[p] for p in ps))
-
             # all positives of a clause are equal, minima, and not equal to any of the negatives -> potential push
             s1.to(clause_states[e],
                   *(IsValue(srcs[p]) for p in ps),
@@ -216,37 +214,15 @@ class TrieExecution:
                 depv2 =  dependencies[v2]
                 if len(depv2) == 0:
                     var_states[v].to(var_states[v], srcs[v] == srcs[v2], active=(srcs[v2], ), descend=(srcs[v2],))
-                elif len(depv2) == 1 and len(next(iter(depv2))) == 1:
-                    target = srcs[list(list(depv2)[0])[0]]
-                    new_state = g.states(f"n{stateidx}")[0]
-                    stateidx += 1
-                    var_states[v].to(new_state, srcs[v] == srcs[v2], active=(srcs[v2], ))
-
-                    new_state.to(var_states[v], srcs[v] == srcs[v2], PrefixOf(srcs[v2], target), active=(target, ), descend=(srcs[v2],))
-                    new_state.to(var_states[v], srcs[v] == srcs[v2], NotPrefixOf(srcs[v2], target), active=(target, ), next_i=((srcs[v2], (target, )),))
-                    # else, if target is None
-                    new_state.to(var_states[v], Finished(target), end=(srcs[v2], ))
                 else:
-                    new_state = g.states(f"n{stateidx}")[0]
-                    stateidx += 1
-                    var_states[v].to(new_state, srcs[v] == srcs[v2], active=(srcs[v2], ), define_to_approach=("m", [[srcs[p] for p in s] for s in depv2]))
-                    new_state.to(var_states[v], VarNone("m"), descend=(srcs[v2],))
-                    new_state.to(var_states[v], PrefixOf(srcs[v2], "m", True), descend=(srcs[v2],))
-                    new_state.to(var_states[v], NotPrefixOf(srcs[v2], "m", True), next_i_var=((srcs[v2], "m"), ))
-                # var_states[v].to(var_states[v], srcs[v] == srcs[v2], active=(srcs[v2], ), descend=(srcs[v2],))
+                    var_states[v].to(var_states[v], srcs[v] == srcs[v2], active=(srcs[v2], ), approach=((srcs[v2], [[srcs[p] for p in s] for s in depv2]), ))
 
             # else branch
             if v in formula.singletons():
                 var_states[v].to(s1, descend=(srcs[v],))
 
             else:
-                new_state = g.states(f"n{stateidx}")[0]
-                stateidx += 1
-                var_states[v].to(new_state,
-                                 define_to_approach=("m", [[srcs[p] for p in s] for s in dependencies[v]]))
-                new_state.to(s1, VarNone("m"), descend=(srcs[v],))
-                new_state.to(s1, PrefixOf(srcs[v], "m", True), descend=(srcs[v],))
-                new_state.to(s1, NotPrefixOf(srcs[v], "m", True), next_i_var=((srcs[v], "m"),))
+                var_states[v].to(s1, approach=((srcs[v], [[srcs[p] for p in s] for s in dependencies[v]]), ))
 
         return g
 

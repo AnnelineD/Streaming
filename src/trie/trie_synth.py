@@ -39,18 +39,6 @@ class Graph:
                             case VarNone(var=var): temp.append(f'{var} is None')
                     print(f"\t\t\tif {' and '.join(temp)}:")
                 else: print(f"\t\t\tif True:")
-                if t.define_to_approach:
-                    varname, values = t.define_to_approach
-                    if len(values) == 1:
-                        print(
-                            f"\t\t\t\t{varname} = {f'argmax([{", ".join('tmp_' + e.name for e in values[0])}])' if len(values[0]) > 1 else 'tmp_' + values[0][0].name}"
-                        )
-                    else:
-                        print(
-                            f"\t\t\t\t{varname} = argmin([{", ".join(f'argmax([{", ".join('tmp_' + e.name for e in s)}])' if len(s) > 1 else 'tmp_' + s[0].name for s in values)}])"
-                        )
-
-                    # print(f"\t\t\t\tprint(\"here is m\", m.name)")
                 for dst, src in t.push: print(f"\t\t\t\t{dst.name}.push(tmp_{src.name}.path())")
                 for src in t.descend: print(f"\t\t\t\ttmp_{src.name} = {src.name}.descend_or_next()")
                 for src, ds in t.next_i:
@@ -58,7 +46,16 @@ class Graph:
                         lvls = [f"{src.name}.difference_level({rhs.name})" for rhs in ds]
                         print(f"\t\t\t\ttmp_{src.name} = {src.name}.next(max({', '.join(lvls)}))")
                     else: print(f"\t\t\t\ttmp_{src.name} = {src.name}.next({src.name}.difference_level({ds[0].name}))")
-                for src, ds in t.next_i_var: print(f"\t\t\t\ttmp_{src.name} = {src.name}.next({src.name}.difference_level({ds}))")
+                for src, ds in t.approach:
+                    if len(ds) == 1:
+                        print(
+                            f"\t\t\t\ttarget = {f'argmax([{", ".join('tmp_' + e.name for e in ds[0])}])' if len(ds[0]) > 1 else 'tmp_' + ds[0][0].name}"
+                        )
+                    else:
+                        print(
+                            f"\t\t\t\ttarget = argmin([{", ".join(f'argmax([{", ".join('tmp_' + e.name for e in s)}])' if len(s) > 1 else 'tmp_' + s[0].name for s in ds)}])"
+                        )
+                    print(f"\t\t\t\ttmp_{src.name} = {src.name}.approach(target)")
                 for src in t.end: print(f"\t\t\t\ttmp_{src.name} = None")
                 print(f"\t\t\t\tstate = '{t.s_to.name}'")
                 print(f"\t\t\t\tcontinue")
@@ -94,20 +91,19 @@ class Graph:
                         case Finished(lhs=lhs): cond.append(f'{lhs.name} is None')
                         case NotFinished(lhs=lhs): cond.append(f'active {lhs.name}')
                         case VarNone(var=var): cond.append(f'{var} is None')
-            if t.define_to_approach:
-                varname, values = t.define_to_approach
-                if len(values) == 1:
-                    todo.append(
-                        f"{varname} = {f'argmax({", ".join(e.name for e in values[0])})' if len(values[0]) > 1 else values[0][0].name}"
-                    )
-                else:
-                    todo.append(
-                        f"{varname} = argmin({", ".join(f'argmax({", ".join(e.name for e in s)})' if len(s) > 1 else s[0].name for s in values)})"
-                    )
             for dst, src in t.push: todo.append(f"{dst.name}!{src.name}")
             for src in t.descend: todo.append(f"{src.name}.descend_or_next()")
             for src, ds in t.next_i: todo.append(f"{src.name}.next({[d.name for d in ds]})")
-            for src, ds in t.next_i_var: todo.append(f"{src.name}.next({src.name}.difference_level({ds}))")
+            for src, ds in t.approach:
+                if len(ds) == 1:
+                    todo.append(
+                        f"target = {f'argmax([{", ".join(e.name for e in ds[0])}])' if len(ds[0]) > 1 else ds[0][0].name}"
+                    )
+                else:
+                    todo.append(
+                        f"target = argmin([{", ".join(f'argmax([{", ".join(e.name for e in s)}])' if len(s) > 1 else s[0].name for s in ds)}])"
+                    )
+                todo.append(f"{src.name}.approach(target)")
             for src in t.end: todo.append(f"end {src.name}")
             if len(cond) == 0:
                 cond = ["else"]
@@ -179,11 +175,11 @@ class NEIfValue(Cond):
         self.kind = kind; self.lhs = lhs; self.rhs = rhs
 
 class Transition:
-    def __init__(self, s_from, s_to, when, push, descend, next_i, next_i_var, active, define_to_approach, end):
-        self.s_from = s_from; self.s_to = s_to; self.when = when; self.push = push; self.descend = descend; self.next_i = next_i; self.next_i_var = next_i_var; self.active=active; self.define_to_approach=define_to_approach; self.end=end;
+    def __init__(self, s_from, s_to, when, push, descend, next_i, active, approach, end):
+        self.s_from = s_from; self.s_to = s_to; self.when = when; self.push = push; self.descend = descend; self.next_i = next_i; self.active=active; self.approach=approach; self.end=end;
 class Vtx(Node):
-    def to(self, other, *when, push=(), descend=(), next_i=(), next_i_var=(), active=(), define_to_approach=(), end=()):
-        self.graph.transitions.append(Transition(self, other, when, push, descend, next_i, next_i_var, active, list(define_to_approach), end))
+    def to(self, other, *when, push=(), descend=(), next_i=(), active=(), approach=(), end=()):
+        self.graph.transitions.append(Transition(self, other, when, push, descend, next_i, active, approach, end))
 
 def ctx():
     # (a /\ c)\/(b /\ c) \ d
@@ -368,8 +364,24 @@ class Source:
         return other.path().startswith(self.path())
     def difference_level(self, other):
         return next((e for e, (c1, c2) in enumerate(zip(self.path(), other.path())) if c1 != c2), None)
+    def val_difference_level(self, value):
+        return next((e for e, (c1, c2) in enumerate(zip(self.path(), value)) if c1 != c2), None)
     def is_value(self):
         return self.current.is_value()
+    def approach(self, other):
+        if other is None:
+            return None
+        if self.prefix_of(other):
+            return self.descend_or_next()
+        else:
+            return self.next(self.difference_level(other))
+    def approach_val(self, value):
+        if value is None:
+            return None
+        if self.val_prefix_of(value):
+            return self.descend_or_next()
+        else:
+            return self.next(self.val_difference_level(value))
 
 
 
