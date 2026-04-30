@@ -162,15 +162,15 @@ class TrieExecution:
         # to add: if all positives are None, we are done, we don't have to pull the negatives
         g = Graph()
         s0, s1, s2 = g.states('s0', 's1', 's2')
-        var_states = {v: g.states(f"s{v}")[0] for v in formula.vars()}
+        pos_vars = {v for c in formula.clauses for v in c.P}
+
+        var_states = {v: g.states(f"s{v}")[0] for v in pos_vars}
         clause_states = {e: g.states(f"sc{e}")[0] for e, c in enumerate(formula.clauses)}
         srcs = {v: g.sources(v)[0] for v in formula.vars()}
 
         stateidx = 0
 
         dependencies = formula.dependencies()
-
-        pos_vars = {v for c in formula.clauses for v in c.P}
 
         g.init = s0
 
