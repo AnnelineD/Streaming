@@ -129,27 +129,26 @@ class TrieExecution:
 
         for e, clause in enumerate(formula.clauses):
             ps = list(clause.P)
-            # s1.to(s1, *(srcs[ps[0]] == srcs[q] for q in ps), *(OpOrNot(">=", srcs[v], srcs[ps[0]]) for v in formula.vars().difference(ps).difference(clause.N)), *(OpOrNot(">", srcs[n], srcs[ps[0]]) for n in clause.N), active=tuple(srcs[p] for p in ps), push=((r, srcs[ps[0]]), ), pull=tuple(srcs[p] for p in ps))
             s1.to(clause_states[e],
                   *(IsValue(srcs[p]) for p in ps),
                   *(srcs[ps[0]] == srcs[q] for q in ps),
-                  *(OpOrNot(">=", srcs[v], srcs[ps[0]]) for v in pos_vars.difference(ps)),
-                  *(NEIfValue("!=", srcs[n], srcs[ps[0]]) for n in clause.N), active=tuple(srcs[p] for p in ps))
+                  *(Finished(srcs[v]) | Inequality(">=", srcs[v], srcs[ps[0]]) for v in pos_vars.difference(ps)),
+                  *(Or(Finished(srcs[n]), Or(Inequality("!=", srcs[n], srcs[ps[0]]), Not(IsValue(srcs[n])))) for n in clause.N), active=tuple(srcs[p] for p in ps))
             # possible optimization: create new state for every clause in which we know that the vars in that clause are part of the minima
-            clause_states[e].to(var_states[ps[0]], *(OpOrEqNotValue(">", srcs[n], srcs[ps[0]]) for n in clause.N), push=((r, srcs[ps[0]]),))
-                                # descend=tuple(srcs[p] for p in ps))
+            clause_states[e].to(var_states[ps[0]], *(Or(Or(Finished(srcs[n]), Inequality(">", srcs[n], srcs[ps[0]])), And(Inequality("==", srcs[n], srcs[ps[0]]), Not(IsValue(srcs[n])))) for n in clause.N), push=((r, srcs[ps[0]]),))
+
             for n in clause.N:
                 new_state = g.states(f"n{stateidx}")[0]
                 clause_states[e].to(new_state, srcs[n] < srcs[ps[0]], active=(srcs[n],))
                 new_state.to(clause_states[e], PrefixOf(srcs[n], srcs[ps[0]]), active=(srcs[n],), descend=(srcs[n],))
-                new_state.to(clause_states[e], NotPrefixOf(srcs[n], srcs[ps[0]]), active=(srcs[n],), next_i=((srcs[n], (srcs[ps[0]], )),))
+                new_state.to(clause_states[e], Not(PrefixOf(srcs[n], srcs[ps[0]])), active=(srcs[n],), next_i=((srcs[n], (srcs[ps[0]], )),))
                 stateidx += 1
                 clause_states[e].to(s1, IsValue(srcs[n]), srcs[n] == srcs[ps[0]], active=(srcs[n],))
 
         s1.to(s2)
 
         for v in pos_vars:
-            s2.to(var_states[v], *(OpOrNot(">=", srcs[v2], srcs[v]) for v2 in pos_vars.difference(v)),
+            s2.to(var_states[v], *(Or(Finished(srcs[v]), Inequality(">=", srcs[v2], srcs[v])) for v2 in pos_vars.difference(v)),
                   active=(srcs[v],))
             for v2 in pos_vars.difference(v):
                 var_states[v].to(var_states[v], srcs[v] == srcs[v2], active=(srcs[v2], ), descend=(srcs[v2],))
@@ -184,18 +183,18 @@ class TrieExecution:
             s1.to(clause_states[e],
                   *(IsValue(srcs[p]) for p in ps),
                   *(srcs[ps[0]] == srcs[q] for q in ps),
-                  *(OpOrNot(">=", srcs[v], srcs[ps[0]]) for v in pos_vars.difference(ps)),
-                  *(NEIfValue("!=", srcs[n], srcs[ps[0]]) for n in clause.N), active=tuple(srcs[p] for p in ps))
+                  *(Finished(srcs[v]) | (srcs[v] >= srcs[ps[0]]) for v in pos_vars.difference(ps)),
+                  *(Finished(srcs[n]) | (srcs[n] != srcs[ps[0]]) | Not(IsValue(srcs[n])) for n in clause.N), active=tuple(srcs[p] for p in ps))
             # all negatives of the clause are bigger than the equal positives -> push
             # possible optimization: create new state for every clause in which we know that the vars in that clause are part of the minima
-            clause_states[e].to(var_states[ps[0]], *(OpOrEqNotValue(">", srcs[n], srcs[ps[0]]) for n in clause.N), push=((r, srcs[ps[0]]),))
-                                # descend=tuple(srcs[p] for p in ps))
+            clause_states[e].to(var_states[ps[0]], *(Finished(srcs[n]) | (srcs[n] > srcs[ps[0]]) | ((srcs[n] == srcs[ps[0]]) & Not(IsValue(srcs[n]))) for n in clause.N), push=((r, srcs[ps[0]]),))
+
             for n in clause.N:
                 new_state = g.states(f"n{stateidx}")[0]
                 # a negative n is smaller than the positives -> increase it
                 clause_states[e].to(new_state, srcs[n] < srcs[ps[0]], active=(srcs[n],))
                 new_state.to(clause_states[e], PrefixOf(srcs[n], srcs[ps[0]]), active=(srcs[n],), descend=(srcs[n],))
-                new_state.to(clause_states[e], NotPrefixOf(srcs[n], srcs[ps[0]]), active=(srcs[n],), next_i=((srcs[n], (srcs[ps[0]], )),))
+                new_state.to(clause_states[e], Not(PrefixOf(srcs[n], srcs[ps[0]])), active=(srcs[n],), next_i=((srcs[n], (srcs[ps[0]], )),))
                 stateidx += 1
                 # a negative n is equal to the positives -> no push
                 clause_states[e].to(s1, IsValue(srcs[n]), srcs[n] == srcs[ps[0]], active=(srcs[n],))
@@ -204,7 +203,7 @@ class TrieExecution:
 
         for v in pos_vars:
             # find one of the minimum elements
-            s2.to(var_states[v], *(OpOrNot(">=", srcs[v2], srcs[v]) for v2 in pos_vars.difference(v)),
+            s2.to(var_states[v], *(Or(Finished(srcs[v2]), Inequality(">=", srcs[v2], srcs[v])) for v2 in pos_vars.difference(v)),
                   active=(srcs[v],))
             for v2 in pos_vars.difference(v):
                 # pull all other minima
@@ -251,7 +250,7 @@ if __name__ == '__main__':
     """
 
 
-    clauses=[Clause(P=frozenset({'e', 'f'}), N=frozenset()), Clause(P=frozenset({'e', 'c', 'b'}), N=frozenset({'a', 'f'})), Clause(P=frozenset({'f'}), N=frozenset({'e', 'c'}))]
+    clauses=[Clause(P=frozenset({'a'}), N=frozenset({'b'})), Clause(P=frozenset({'b'}), N=frozenset({'c'})), Clause(P=frozenset({'c'}), N=frozenset({'d'})), Clause(P=frozenset({'d'}), N=frozenset({'e'}))]
     env={
         "a": {},
         "b": {('001111', None), ('010', None), ('1000', None), ('10100', None), ('11', None), ('1101', None)},

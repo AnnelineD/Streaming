@@ -25,18 +25,17 @@ class Graph:
                 if t.when:
                     temp = []
                     for c in t.when:
-                        match c:
-                            case Inequality(kind=kind, lhs=lhs, rhs=rhs): temp.append(f'tmp_{lhs.name}.path() {kind} tmp_{rhs.name}.path()')
-                            case OpOrNot(kind=kind, lhs=lhs, rhs=rhs): temp.append(f'(tmp_{lhs.name} is None or tmp_{lhs.name}.path() {kind} tmp_{rhs.name}.path())')
-                            case NEIfValue(kind=kind, lhs=lhs, rhs=rhs): temp.append( f'(tmp_{lhs.name} is None or (tmp_{lhs.name}.path() {kind} tmp_{rhs.name}.path() or not tmp_{lhs.name}.is_value()))')
-                            case OpOrEqNotValue(kind=kind, lhs=lhs, rhs=rhs): temp.append(f'(tmp_{lhs.name} is None or tmp_{lhs.name}.path() {kind} tmp_{rhs.name}.path() or (tmp_{lhs.name}.path() == tmp_{rhs.name}.path() and not tmp_{lhs.name}.is_value()))')
-                            case IsValue(lhs=lhs): temp.append(f'tmp_{lhs.name}.is_value()')
-                            case NotValue(lhs=lhs): temp.append(f'not tmp_{lhs.name}.is_value()')
-                            case PrefixOf(lhs=lhs, rhs=rhs, is_var=is_var):  temp.append(f'tmp_{lhs.name}.prefix_of({rhs if is_var else f'tmp_{rhs.name}'})')
-                            case NotPrefixOf(lhs=lhs, rhs=rhs, is_var=is_var): temp.append(f'not tmp_{lhs.name}.prefix_of({rhs if is_var else f'tmp_{rhs.name}'})')
-                            case Finished(lhs=lhs): temp.append(f'tmp_{lhs.name} is None')
-                            case NotFinished(lhs=lhs): temp.append(f'tmp_{lhs.name}')
-                            case VarNone(var=var): temp.append(f'{var} is None')
+                        def print_condition(c):
+                            match c:
+                                case Inequality(kind=kind, lhs=lhs, rhs=rhs): return (f'tmp_{lhs.name}.path() {kind} tmp_{rhs.name}.path()')
+                                case IsValue(lhs=lhs): return (f'tmp_{lhs.name}.is_value()')
+                                case PrefixOf(lhs=lhs, rhs=rhs, is_var=is_var):  return (f'tmp_{lhs.name}.prefix_of({rhs if is_var else f'tmp_{rhs.name}'})')
+                                case Finished(lhs=lhs): return (f'tmp_{lhs.name} is None')
+                                case NotFinished(lhs=lhs): return (f'tmp_{lhs.name}')
+                                case Not(lhs=lhs): return f'not ({print_condition(lhs)})'
+                                case Or(lhs=lhs, rhs=rhs): return f'({print_condition(lhs)} or {print_condition(rhs)})'
+                                case And(lhs=lhs, rhs=rhs): return f'({print_condition(lhs)} and {print_condition(rhs)})'
+                        temp.append(print_condition(c))
                     print(f"\t\t\tif {' and '.join(temp)}:")
                 else: print(f"\t\t\tif True:")
                 for dst, src in t.push: print(f"\t\t\t\t{dst.name}.push(tmp_{src.name}.path())")
@@ -75,22 +74,17 @@ class Graph:
             # for src in t.finished: cond.append(f"finished {src.name}")
             if t.when:
                 for c in t.when:
-                    match c:
-                        case Inequality(kind=kind, lhs=lhs, rhs=rhs): cond.append(f'{lhs.name} {kind} {rhs.name}')
-                        case OpOrNot(kind=kind, lhs=lhs, rhs=rhs): cond.append(f'({lhs.name} is None or {lhs.name} {kind} {rhs.name})')
-                        case NEIfValue(kind=kind, lhs=lhs, rhs=rhs):
-                            cond.append(
-                                f'({lhs.name} is None or '
-                                f'({lhs.name}.path() {kind} {rhs.name}.path() '
-                                f'or not {lhs.name}.is_value()))'
-                            )
-                        case IsValue(lhs=lhs): cond.append(f'{lhs.name}.is_value()')
-                        case NotValue(lhs=lhs): cond.append(f'not {lhs.name}.is_value()')
-                        case PrefixOf(lhs=lhs, rhs=rhs, is_var=is_var): cond.append(f'{lhs.name}.prefix_of({rhs if is_var else rhs.name})')
-                        case NotPrefixOf(lhs=lhs, rhs=rhs, is_var=is_var): cond.append(f'not {lhs.name}.prefix_of({rhs if is_var else rhs.name})')
-                        case Finished(lhs=lhs): cond.append(f'{lhs.name} is None')
-                        case NotFinished(lhs=lhs): cond.append(f'active {lhs.name}')
-                        case VarNone(var=var): cond.append(f'{var} is None')
+                    def print_condition(c):
+                        match c:
+                            case Inequality(kind=kind, lhs=lhs, rhs=rhs): return (f'{lhs.name} {kind} {rhs.name}')
+                            case IsValue(lhs=lhs): return (f'{lhs.name}.is_value()')
+                            case PrefixOf(lhs=lhs, rhs=rhs, is_var=is_var): return (f'{lhs.name}.prefix_of({rhs if is_var else rhs.name})')
+                            case Finished(lhs=lhs): return (f'{lhs.name} is None')
+                            case NotFinished(lhs=lhs): return (f'active {lhs.name}')
+                            case Not(lhs=lhs): return f'not {print_condition(lhs)}'
+                            case And(lhs=lhs, rhs=rhs): return f'({print_condition(lhs)}) and ({print_condition(rhs)})'
+                            case Or(lhs=lhs, rhs=rhs): return f'({print_condition(lhs)}) or ({print_condition(rhs)})'
+                    cond.append(print_condition(c))
             for dst, src in t.push: todo.append(f"{dst.name}!{src.name}")
             for src in t.descend: todo.append(f"{src.name}.descend_or_next()")
             for src, ds in t.next_i: todo.append(f"{src.name}.next({[d.name for d in ds]})")
@@ -121,13 +115,18 @@ class Node:
     def named(cls, g, *args) -> list[Self]: return [cls(g, a) for a in args]
 class Src(Node):
     def __lt__(self, other: 'Src'): return Inequality('<', self, other)
+    def __le__(self, other: 'Src'): return Inequality('<=', self, other)
     def __gt__(self, other: 'Src'): return Inequality('>', self, other)
+    def __ge__(self, other: 'Src'): return Inequality('>=', self, other)
     def __eq__(self, other: 'Src'): return Inequality('==', self, other)
     def __ne__(self, other: 'Src'): return Inequality('!=', self, other)
+
 class Snk(Node): pass
 
 class Cond:
-    pass
+    def __or__(self, other: 'Cond'): return Or(self, other)
+    def __and__(self, other: 'Cond'): return And(self, other)
+    def __neg__(self): return Not(self)
 
 class Inequality(Cond):
     def __init__(self, kind: Literal["=="] | Literal["<"] | Literal[">"] | Literal["!="], lhs: Src, rhs: Src):
@@ -137,22 +136,9 @@ class IsValue(Cond):
     def __init__(self, lhs: Src):
         self.lhs = lhs
 
-class NotValue(Cond):
-    def __init__(self, lhs: Src):
-        self.lhs = lhs
-
 class PrefixOf(Cond):
     def __init__(self, lhs: Src, rhs:Src, is_var=False):
         self.lhs = lhs; self.rhs = rhs; self.is_var = is_var
-
-
-class NotPrefixOf(Cond):
-    def __init__(self, lhs: Src, rhs:Src, is_var=False):
-        self.lhs = lhs; self.rhs = rhs; self.is_var=is_var
-
-class VarNone(Cond):
-    def __init__(self, var):
-        self.var = var
 
 class Finished(Cond):
     def __init__(self, lhs: Src):
@@ -162,17 +148,17 @@ class NotFinished(Cond):
     def __init__(self, lhs: Src):
         self.lhs = lhs
 
-class OpOrNot(Cond):
-    def __init__(self, kind: Literal["=="] | Literal["<"] | Literal[">"] | Literal[">="] | Literal["<="] | Literal["!="], lhs: Src, rhs: Src):
-        self.kind = kind; self.lhs = lhs; self.rhs = rhs
+class Or(Cond):
+    def __init__(self, lhs: Cond, rhs: Cond):
+        self.lhs = lhs; self.rhs = rhs
 
-class OpOrEqNotValue(Cond):
-    def __init__(self, kind: Literal["=="] | Literal["<"] | Literal[">"] | Literal[">="] | Literal["<="] | Literal["!="], lhs: Src, rhs: Src):
-        self.kind = kind; self.lhs = lhs; self.rhs = rhs
+class And(Cond):
+    def __init__(self, lhs: Cond, rhs: Cond):
+        self.lhs = lhs; self.rhs = rhs
 
-class NEIfValue(Cond):
-    def __init__(self, kind: Literal["=="] | Literal["<"] | Literal[">"] | Literal[">="] | Literal["<="] | Literal["!="], lhs: Src, rhs: Src):
-        self.kind = kind; self.lhs = lhs; self.rhs = rhs
+class Not(Cond):
+    def __init__(self, lhs: Cond):
+        self.lhs = lhs
 
 class Transition:
     def __init__(self, s_from, s_to, when, push, descend, next_i, active, approach, end):
@@ -199,46 +185,46 @@ def ctx():
     s1.to(s12, Finished(b), NotFinished(a), NotFinished(c), a > c)
 
     s2.to(s1, PrefixOf(a, c), descend=(a,)) # we already know that a and c are not finished
-    s2.to(s1, NotPrefixOf(a, c), next_i=((a, (c, )),))
+    s2.to(s1, Not(PrefixOf(a, c)), next_i=((a, (c, )),))
 
     s3.to(s1, PrefixOf(b, c), descend=(b,)) # we already know that b and c are not finished
-    s3.to(s1, NotPrefixOf(b, c), next_i=((b, (c,)),))
+    s3.to(s1, Not(PrefixOf(b, c)), next_i=((b, (c,)),))
 
     s4.to(s7, IsValue(a), IsValue(c))   # we already know that a and c are not finished
-    s4.to(s1, NotValue(a), descend=(a,))
-    s4.to(s1, NotValue(c), descend=(a,))
+    s4.to(s1, Not(IsValue(a)), descend=(a,))
+    s4.to(s1, Not(IsValue(c)), descend=(a,))
 
     s5.to(s9, IsValue(b), IsValue(c))
-    s5.to(s1, NotValue(b), descend=(b,))
-    s5.to(s1, NotValue(c), descend=(b,))
+    s5.to(s1, Not(IsValue(b)), descend=(b,))
+    s5.to(s1, Not(IsValue(c)), descend=(b,))
 
     s6.to(s1, PrefixOf(c, a), descend=(c,))
     s6.to(s1, PrefixOf(c, b), descend=(c,))
-    s6.to(s1, NotPrefixOf(c, a), NotPrefixOf(c, b), next_i=((c, (a, b)),))
+    s6.to(s1, Not(PrefixOf(c, a)), Not(PrefixOf(c, b)), next_i=((c, (a, b)),))
 
     s7.to(s8, NotFinished(d), a > d)
     s7.to(s1, NotFinished(d), a < d, push=((r, a),), descend=(a,))
     s7.to(s1, NotFinished(d), a == d, IsValue(d), descend=(a,))
-    s7.to(s1, NotFinished(d), a == d, NotValue(d), push=((r, a),), descend=(a,))
+    s7.to(s1, NotFinished(d), a == d, Not(IsValue(d)), push=((r, a),), descend=(a,))
     s7.to(s1, Finished(d), push=((r, a),), descend=(a,))
 
     s8.to(s7, NotFinished(d), PrefixOf(d, a), descend=(d,))
-    s8.to(s7, NotFinished(d), NotPrefixOf(d, a), next_i=((d, (a,)),))
+    s8.to(s7, NotFinished(d), Not(PrefixOf(d, a)), next_i=((d, (a,)),))
 
     s9.to(s10, NotFinished(d), b > d)
     s9.to(s1, NotFinished(d), b < d, push=((r, b),), descend=(b,))
     s9.to(s1, NotFinished(d), b == d, IsValue(d), descend=(b,))
-    s9.to(s1, NotFinished(d), b == d, NotValue(d), push=((r, b),), descend=(b,))
+    s9.to(s1, NotFinished(d), b == d, Not(IsValue(d)), push=((r, b),), descend=(b,))
     s9.to(s1, Finished(d), push=((r, b),), descend=(b,))
 
     s10.to(s9, NotFinished(d), PrefixOf(d, b), descend=(d, ))
-    s10.to(s9, NotFinished(d), NotPrefixOf(d, b), next_i=((d, (b, )), ))
+    s10.to(s9, NotFinished(d), Not(PrefixOf(d, b)), next_i=((d, (b, )), ))
 
     s11.to(s1, PrefixOf(c, b), descend=(c,))
-    s11.to(s1, NotPrefixOf(c, b), next_i=((c, (b,)),))
+    s11.to(s1, Not(PrefixOf(c, b)), next_i=((c, (b,)),))
 
     s12.to(s1, PrefixOf(c, a), descend=(c, ))
-    s12.to(s1, NotPrefixOf(c, a), next_i=((c, (a, )), ))
+    s12.to(s1, Not(PrefixOf(c, a)), next_i=((c, (a, )), ))
 
     return g
 
@@ -262,34 +248,34 @@ def intersection_graph():
     s1.to(s5, NotFinished(a), NotFinished(b), NotFinished(c), c < b)
 
     s2.to(s1, IsValue(a), IsValue(b), IsValue(c), push = ((r, a), ), descend=(a, )) # or descend b or descend c
-    s2.to(s1, NotValue(a), descend=(a, )) # or descend b or descend c
-    s2.to(s1, NotValue(b), descend=(a, )) # or descend b or descend c
-    s2.to(s1, NotValue(c), descend=(a, )) # or descend b or descend c
+    s2.to(s1, Not(IsValue(a)), descend=(a, )) # or descend b or descend c
+    s2.to(s1, Not(IsValue(b)), descend=(a, )) # or descend b or descend c
+    s2.to(s1, Not(IsValue(c)), descend=(a, )) # or descend b or descend c
 
 
     s3.to(s1, b > c, PrefixOf(a, b), descend=(a,))
     s3.to(s1, b == c, PrefixOf(a, b), descend=(a,))
     s3.to(s1, b < c, PrefixOf(a, c), descend=(a,))
     s3.to(s1, b == c, PrefixOf(a, c), descend=(a,))
-    s3.to(s1, b > c, NotPrefixOf(a, b), next_i=((a, (b, )),))
-    s3.to(s1, b < c, NotPrefixOf(a, c), next_i=((a, (c, )),))
-    s3.to(s1, b == c, NotPrefixOf(a, c), next_i=((a, (c, )),))
+    s3.to(s1, b > c, Not(PrefixOf(a, b)), next_i=((a, (b, )),))
+    s3.to(s1, b < c, Not(PrefixOf(a, c)), next_i=((a, (c, )),))
+    s3.to(s1, b == c, Not(PrefixOf(a, c)), next_i=((a, (c, )),))
 
     s4.to(s1, a > c, PrefixOf(b, a), descend=(b,))
     s4.to(s1, a == c, PrefixOf(b, a), descend=(b,))
     s4.to(s1, a < c, PrefixOf(b, c), descend=(b,))
     s4.to(s1, a == c, PrefixOf(b, c), descend=(b,))
-    s4.to(s1, a > c, NotPrefixOf(b, a), next_i=((b, (a, )),))
-    s4.to(s1, a < c, NotPrefixOf(b, c), next_i=((b, (c, )),))
-    s4.to(s1, a == c, NotPrefixOf(b, c), next_i=((b, (c, )),))
+    s4.to(s1, a > c, Not(PrefixOf(b, a)), next_i=((b, (a, )),))
+    s4.to(s1, a < c, Not(PrefixOf(b, c)), next_i=((b, (c, )),))
+    s4.to(s1, a == c, Not(PrefixOf(b, c)), next_i=((b, (c, )),))
 
     s5.to(s1, a > b, PrefixOf(c, a), descend=(c,))
     s5.to(s1, a == b, PrefixOf(c, a), descend=(c,))
     s5.to(s1, a < b, PrefixOf(c, b), descend=(c,))
     s5.to(s1, a == b, PrefixOf(c, b), descend=(c,))
-    s5.to(s1, a > b, NotPrefixOf(c, a), next_i=((c, (a,)),))
-    s5.to(s1, a < b, NotPrefixOf(c, b), next_i=((c, (b,)),))
-    s5.to(s1, a == b, NotPrefixOf(c, b), next_i=((c, (b,)),))
+    s5.to(s1, a > b, Not(PrefixOf(c, a)), next_i=((c, (a,)),))
+    s5.to(s1, a < b, Not(PrefixOf(c, b)), next_i=((c, (b,)),))
+    s5.to(s1, a == b, Not(PrefixOf(c, b)), next_i=((c, (b,)),))
 
     return g
 
