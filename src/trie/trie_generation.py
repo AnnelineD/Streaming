@@ -158,7 +158,6 @@ class TrieExecution:
 
     @staticmethod
     def create_state_machine(formula: DNF):
-        # to add: if all positives are None, we are done, we don't have to pull the negatives
         g = Graph()
         s0, s1, s2 = g.states('s0', 's1', 's2')
         pos_vars = {v for c in formula.clauses for v in c.P}
@@ -203,7 +202,7 @@ class TrieExecution:
 
         for v in pos_vars:
             # find one of the minimum elements
-            s2.to(var_states[v], *(Or(Finished(srcs[v2]), Inequality(">=", srcs[v2], srcs[v])) for v2 in pos_vars.difference(v)),
+            s2.to(var_states[v], *(Finished(srcs[v2]) | (srcs[v2] >= srcs[v]) for v2 in pos_vars.difference(v)),
                   active=(srcs[v],))
             for v2 in pos_vars.difference(v):
                 # pull all other minima
