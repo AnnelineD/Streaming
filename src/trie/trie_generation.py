@@ -248,27 +248,29 @@ if __name__ == '__main__':
     }
     """
 
-
-    clauses=[Clause(P=frozenset({'a'}), N=frozenset({'b'})), Clause(P=frozenset({'b'}), N=frozenset({'c'})), Clause(P=frozenset({'c'}), N=frozenset({'d'})), Clause(P=frozenset({'d'}), N=frozenset({'e'}))]
-    env={
-        "a": {},
-        "b": {('001111', None), ('010', None), ('1000', None), ('10100', None), ('11', None), ('1101', None)},
-        "c": {('0', None), ('00000', None), ('001111', None), ('010', None), ('01001', None), ('110001', None), ('1101', None)},
-        "d": {('000111', None), ('01000', None), ('10010', None), ('1110', None)},
-        "e": {('001111', None), ('01001', None), ('0101', None), ('1010', None), ('10100', None), ('110001', None), ('1101', None)},
-        "f": {('000101', None), ('101', None), ('1010', None), ('11', None), ('110001', None), ('110011', None)},
-    }
-    # wanted=['000101', '001111', '101', '1010', '11', '110001', '110011', '1101']
+    clauses = [Clause(P=frozenset({'g'}), N=frozenset({'d'})), Clause(P=frozenset({'a', 'i'}), N=frozenset({'f'})),
+               Clause(P=frozenset({'g', 'a'}), N=frozenset({'j', 'f'})),
+               Clause(P=frozenset({'g'}), N=frozenset({'j', 'h'})),
+               Clause(P=frozenset({'j', 'b', 'h'}), N=frozenset({'i'})),
+               Clause(P=frozenset({'a', 'c'}), N=frozenset({'g'}))]
+    env = {
+        "a": {('01', None), ('010', None), ('10', None), ('101010', None), ('1101', None)},
+        "b": {('00000', None), ('000010', None), ('001', None), ('0010', None), ('11001', None)},
+        "c": {('0000', None), ('00000', None), ('01', None), ('10000', None), ('101', None), ('110100', None)},
+        "d": {('001', None), ('01101', None), ('11', None), ('1100', None), ('11101', None)},
+        "e": {('1000', None), ('101001', None)},
+        "f": {('1011', None)},
+        "g": {('01011', None), ('101001', None), ('1101', None), ('11011', None), ('111000', None)},
+        "h": {('001', None), ('0010', None), ('0011', None)},
+        "i": {('00011', None), ('0011', None), ('010', None), ('100', None), ('101010', None), ('11001', None),
+              ('1101', None), ('11101', None)},
+        "j": {('001', None), ('0010', None), ('1101', None)},
+    }    # wanted=['000101', '001111', '101', '1010', '11', '110001', '110011', '1101']
     # actual=['001111', '101', '1010', '11', '110001', '1101']
 
 
     env_ = {k: bittrieset(*{s[0] for s in v}) for k, v in env.items()}
-    a = Source('a', env_["a"])
-    b = Source('b', env_["b"])
-    c = Source('c', env_["c"])
-    d = Source('d', env_["d"])
-    e = Source('e', env_["e"])
-    f = Source('f', env_["f"])
+    a, b, c, d, e, f, g, h, i, j = map(lambda kv: Source(kv[0], kv[1]), env_.items())
 
 
     r = Sink()
@@ -276,9 +278,9 @@ if __name__ == '__main__':
     formula = DNF(clauses)
     # f = DNF([Clause({"a", "b", "c", "d"}, {"e", "f"})])
 
-    g = TrieExecution.create_state_machine(formula)
-    g.dot(title=formula.show())
-    g.py()
+    graph = TrieExecution.create_state_machine(formula)
+    graph.dot(title=formula.show())
+    graph.py()
 
 
 
@@ -289,7 +291,7 @@ if __name__ == '__main__':
     # r = TrieExecution.naive(f, env)
     s = StringIO()
     with redirect_stdout(s):
-        g.py()
+        graph.py()
     try:
         exec(s.getvalue())
     except IndexError:

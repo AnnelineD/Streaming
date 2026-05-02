@@ -14,7 +14,7 @@ class Graph:
         for src in self.srcs:
             print(f"tmp_{src.name} = None")
         print(f"state = '{self.init.name}'")
-        print("for i in range(500):")
+        print("for _ in range(500):")
         print('\tprint("state", state)')
         for state in self.vtcs:
             print(f"\tif state == '{state.name}':")
@@ -46,6 +46,7 @@ class Graph:
                         print(f"\t\t\t\ttmp_{src.name} = {src.name}.next(max({', '.join(lvls)}))")
                     else: print(f"\t\t\t\ttmp_{src.name} = {src.name}.next({src.name}.difference_level({ds[0].name}))")
                 for src, ds in t.approach:
+                    # this part could be rewritten with regular min and max instead of argmin and argmax, letting src.approach take a value as argument instead of another source
                     if len(ds) == 1:
                         print(
                             f"\t\t\t\ttarget = {f'argmax([{", ".join('tmp_' + e.name for e in ds[0])}])' if len(ds[0]) > 1 else 'tmp_' + ds[0][0].name}"
@@ -58,7 +59,7 @@ class Graph:
                 for src in t.end: print(f"\t\t\t\ttmp_{src.name} = None")
                 print(f"\t\t\t\tstate = '{t.s_to.name}'")
                 print(f"\t\t\t\tcontinue")
-            # print("\t\tprint(state, 'not continued!')")
+            print("\t\tprint(state, 'not continued!')")
             print("\t\tbreak")
     def dot(self, title=None):
         if title:
