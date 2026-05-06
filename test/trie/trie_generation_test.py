@@ -273,14 +273,14 @@ class FormulaTestBase(unittest.TestCase, ABC):
                 max_neg=max_neg,
             )
 
-            print(clauses)
+            print(dnf.clauses)
 
             for j in range(env_trials):
-                env = self.random_env_for_clauses(clauses, variables, rng)
+                env = self.random_env_for_clauses(dnf.clauses, variables, rng)
 
                 with self.subTest(case=case_name, formula_trial=i, env_trial=j):
                     self.run_formula_case(
-                        clauses,
+                        dnf.clauses,
                         env,
                         trial=(i, j),
                         seed=seed,
