@@ -224,6 +224,96 @@ class TrieExecution:
 
         return g
 
+    @staticmethod
+    def create_state_machine_multiple(formulas: list[DNF]):
+        g = Graph()
+        s0, s1, s2 = g.states('s0', 's1', 's2')
+        pos_vars = {v for form in formulas for c in form.clauses for v in c.P}
+        vars = {v for form in formulas for c in form.clauses for v in c.P.union(c.N)}
+        formula_states = {fi: g.states(f"f{fi}")[0] for fi, _ in enumerate(formulas)}
+        var_states = {v: g.states(f"s{v}")[0] for v in pos_vars}
+        clause_states = {(fi, e): g.states(f"sc_{fi}_{e}")[0] for fi, formula in enumerate(formulas) for e, c in enumerate(formula.clauses)}
+        srcs = {v: g.sources(v)[0] for formula in formulas for v in formula.vars()}
+        sinks = {e: g.sinks(f"r{e}")[0] for e, f in enumerate(formulas)}
+
+        stateidx = 0
+
+        full_formula = DNF([clause for formula in formulas for clause in formula.clauses])
+
+        dependencies = {
+            v: list({
+                s
+                for formula in formulas
+                for s in formula.dependencies().get(v, [])
+            })
+            for v in vars
+        }
+
+        g.init = s0
+
+        s0.to(formula_states[0], descend=(srcs.values()))
+        for fi, formula in enumerate(formulas):
+            for ci, clause in enumerate(formula.clauses):
+                ps = list(clause.P)
+                # all positives of a clause are equal, minima, and not equal to any of the negatives -> potential push
+                formula_states[fi].to(clause_states[(fi, ci)],
+                      *(IsValue(srcs[p]) for p in ps),
+                      *(srcs[ps[0]] == srcs[q] for q in ps),
+                      *(Finished(srcs[v]) | (srcs[v] >= srcs[ps[0]]) for v in pos_vars.difference(ps)),
+                      *(Finished(srcs[n]) | (srcs[n] != srcs[ps[0]]) | Not(IsValue(srcs[n])) for n in clause.N),
+                      active=tuple(srcs[p] for p in ps))
+                # all negatives of the clause are bigger than the equal positives -> push
+                # possible optimization: create new state for every clause in which we know that the vars in that clause are part of the minima
+                if fi < len(formulas) - 1:
+                    clause_states[(fi, ci)].to(formula_states[fi+1], *(
+                        Finished(srcs[n]) | (srcs[n] > srcs[ps[0]]) | ((srcs[n] == srcs[ps[0]]) & Not(IsValue(srcs[n]))) for n
+                        in clause.N), push=((sinks[fi], srcs[ps[0]]),))
+                else:
+                    clause_states[(fi, ci)].to(s2, *(
+                        Finished(srcs[n]) | (srcs[n] > srcs[ps[0]]) | ((srcs[n] == srcs[ps[0]]) & Not(IsValue(srcs[n]))) for n
+                        in clause.N), push=((sinks[fi], srcs[ps[0]]),))
+
+                for n in clause.N:
+                    new_state = g.states(f"n{stateidx}")[0]
+                    # a negative n is smaller than the positives -> increase it
+                    clause_states[(fi, ci)].to(new_state, srcs[n] < srcs[ps[0]], active=(srcs[n],))
+                    new_state.to(clause_states[(fi, ci)], PrefixOf(srcs[n], srcs[ps[0]]), active=(srcs[n],),
+                                 descend=(srcs[n],))
+                    new_state.to(clause_states[(fi, ci)], Not(PrefixOf(srcs[n], srcs[ps[0]])), active=(srcs[n],),
+                                 next_i=((srcs[n], (srcs[ps[0]],)),))
+                    stateidx += 1
+                    # a negative n is equal to the positives -> no push
+                    clause_states[(fi, ci)].to(formula_states[fi], IsValue(srcs[n]), srcs[n] == srcs[ps[0]], active=(srcs[n],))
+
+            if fi < len(formulas) - 1:
+                formula_states[fi].to(formula_states[fi+1])
+            else:
+                formula_states[fi].to(s2)
+
+        for v in pos_vars:
+            # find one of the minimum elements
+            s2.to(var_states[v], *(Finished(srcs[v2]) | (srcs[v2] >= srcs[v]) for v2 in pos_vars.difference(v)),
+                  active=(srcs[v],))
+            for v2 in pos_vars.difference(v):
+                # pull all other minima
+                if v2 in [s for formula in formulas for s in formula.singletons()]:
+                    var_states[v].to(var_states[v], srcs[v] == srcs[v2], active=(srcs[v2],), descend=(srcs[v2],))
+                    continue
+                depv2 = dependencies[v2]
+                if len(depv2) == 0:
+                    var_states[v].to(var_states[v], srcs[v] == srcs[v2], active=(srcs[v2],), descend=(srcs[v2],))
+                else:
+                    var_states[v].to(var_states[v], srcs[v] == srcs[v2], active=(srcs[v2],),
+                                     approach=((srcs[v2], [[srcs[p] for p in s] for s in depv2]),))
+
+            # else branch
+            if v in [s for formula in formulas for s in formula.singletons()]:
+                var_states[v].to(formula_states[0], descend=(srcs[v],))
+
+            else:
+                var_states[v].to(formula_states[0], approach=((srcs[v], [[srcs[p] for p in s] for s in dependencies[v]]),))
+
+        return g
 
 
 if __name__ == '__main__':
@@ -247,12 +337,14 @@ if __name__ == '__main__':
         "d": bittrieset(x, _1),
     }
     """
-
+    """
     clauses = [Clause(P=frozenset({'g'}), N=frozenset({'d'})), Clause(P=frozenset({'a', 'i'}), N=frozenset({'f'})),
                Clause(P=frozenset({'g', 'a'}), N=frozenset({'j', 'f'})),
                Clause(P=frozenset({'g'}), N=frozenset({'j', 'h'})),
                Clause(P=frozenset({'j', 'b', 'h'}), N=frozenset({'i'})),
                Clause(P=frozenset({'a', 'c'}), N=frozenset({'g'}))]
+    
+    
     env = {
         "a": {('01', None), ('010', None), ('10', None), ('101010', None), ('1101', None)},
         "b": {('00000', None), ('000010', None), ('001', None), ('0010', None), ('11001', None)},
@@ -270,6 +362,7 @@ if __name__ == '__main__':
 
 
     env_ = {k: bittrieset(*{s[0] for s in v}) for k, v in env.items()}
+    """
     a, b, c, d, e, f, g, h, i, j = map(lambda kv: Source(kv[0], kv[1]), env_.items())
 
 
