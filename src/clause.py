@@ -77,7 +77,7 @@ class DNF:
         return v
 
     def eval(self, env: dict[str, set]) -> set:
-        result = self.clauses[0].eval(env)
+        result = bittriemap()
         for c in self.clauses:
             result |= c.eval(env)
         return result
