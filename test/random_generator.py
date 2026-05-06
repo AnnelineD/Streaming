@@ -3,6 +3,7 @@ from random import random
 
 from src.clause import Clause, DNF
 from src.expr import Var
+from src.trie.trie import bittrieset
 
 
 def generate_var_names(n):
@@ -19,6 +20,32 @@ def random_set_env(variables, universe=None, rng=None):
         for v in variables
     }
 
+
+def random_trie_path(rng):
+    return "".join(rng.choice("01") for _ in range(rng.randint(1, 6)))
+
+def random_trie_set(rng, size=50):
+    pool = set()
+    while len(pool) < size:
+        pool.add(random_trie_path(rng))
+    return list(pool)
+
+def random_trie_env_for_clauses(clauses, variables, rng):
+    pool = random_trie_set(rng)
+    env = {v: set() for v in variables}
+
+    # inject overlap per clause
+    for clause in clauses:
+        shared = rng.sample(pool, rng.randint(1, 3))
+        for v in clause.P:
+            env[v].update(shared)
+
+    # add noise
+    for v in variables:
+        env[v].update(rng.sample(pool, rng.randint(0, 5)))
+
+    # convert plain sets -> bittrieset
+    return {v: bittrieset(*paths) for v, paths in env.items()}
 
 def rand_expr(rng, names, depth, stop_prob=0.3):
     if depth == 0 or rng.random() < stop_prob:

@@ -9,7 +9,8 @@ from src.normalize import normalize
 from src.trie.trie import bittrieset
 from src.trie.trie_generation import TrieExecution
 from src.trie.trie_synth import Source, Sink
-from test.random_generator import rand_expr, generate_var_names
+from test.random_generator import rand_expr, generate_var_names, random_trie_env_for_clauses
+
 
 class FormulaTestBase(unittest.TestCase, ABC):
     maxDiff = None
@@ -46,33 +47,6 @@ class FormulaTestBase(unittest.TestCase, ABC):
             ),
         )
 
-    # -------- random path generation --------
-
-    def random_path(self, rng):
-        return "".join(rng.choice("01") for _ in range(rng.randint(1, 6)))
-
-    def random_pool(self, rng, size=50):
-        pool = set()
-        while len(pool) < size:
-            pool.add(self.random_path(rng))
-        return list(pool)
-
-    def random_env_for_clauses(self, clauses, variables, rng):
-        pool = self.random_pool(rng)
-        env = {v: set() for v in variables}
-
-        # inject overlap per clause
-        for clause in clauses:
-            shared = rng.sample(pool, rng.randint(1, 3))
-            for v in clause.P:
-                env[v].update(shared)
-
-        # add noise
-        for v in variables:
-            env[v].update(rng.sample(pool, rng.randint(0, 5)))
-
-        # convert plain sets -> bittrieset
-        return {v: bittrieset(*paths) for v, paths in env.items()}
 
     # -------- runners --------
 
@@ -84,7 +58,7 @@ class FormulaTestBase(unittest.TestCase, ABC):
         rng = random.Random(seed)
 
         for i in range(trials):
-            env = self.random_env_for_clauses(clauses, variables, rng)
+            env = random_trie_env_for_clauses(clauses, variables, rng)
 
             with self.subTest(case=case_name, i=i):
                 self.run_formula_case(
@@ -123,7 +97,7 @@ class FormulaTestBase(unittest.TestCase, ABC):
             print(dnf.clauses)
 
             for j in range(env_trials):
-                env = self.random_env_for_clauses(dnf.clauses, variables, rng)
+                env = random_trie_env_for_clauses(dnf.clauses, variables, rng)
 
                 with self.subTest(case=case_name, formula_trial=i, env_trial=j):
                     self.run_formula_case(
@@ -309,7 +283,7 @@ class TestStateMachineMultipleGeneration(FormulaTestBase):
             all_clauses = [clause for dnf in dnfs for clause in dnf.clauses]
 
             for j in range(env_trials):
-                env = self.random_env_for_clauses(
+                env = random_trie_env_for_clauses(
                     all_clauses,
                     names,
                     rng,
