@@ -9,8 +9,7 @@ from src.clause import DNF, Clause
 from src.set.set_generation import graph_generation #, naive
 from src.set.synth import Sink, Source, Graph
 
-from test.random_generator import random_set_env
-
+from test.random_generator import random_set_env, random_dnf
 
 CASES = [
     {
@@ -198,50 +197,6 @@ class FormulaTestBase(unittest.TestCase, ABC):
             ),
         )
 
-
-    # -------------------------
-    # Random clause helpers
-    # -------------------------
-
-    def random_clause(self, rng, variables, min_pos=1, max_pos=3, min_neg=0, max_neg=2):
-        vars_list = list(variables)
-
-        p_size = rng.randint(min_pos, min(max_pos, len(vars_list)))
-        P = set(rng.sample(vars_list, p_size))
-
-        remaining = [v for v in vars_list if v not in P]
-        max_neg_allowed = min(max_neg, len(remaining))
-        min_neg_allowed = min(min_neg, max_neg_allowed)
-        n_size = rng.randint(min_neg_allowed, max_neg_allowed) if remaining else 0
-        N = set(rng.sample(remaining, n_size))
-
-        return Clause.make(P, N)
-
-    def random_clauses(
-        self,
-        rng,
-        *,
-        variable_count=5,
-        clause_count=3,
-        min_pos=1,
-        max_pos=3,
-        min_neg=0,
-        max_neg=2,
-    ):
-        variables = [chr(ord("a") + i) for i in range(variable_count)]
-        clauses = [
-            self.random_clause(
-                rng,
-                variables,
-                min_pos=min_pos,
-                max_pos=max_pos,
-                min_neg=min_neg,
-                max_neg=max_neg,
-            )
-            for _ in range(clause_count)
-        ]
-        return clauses, variables
-
     # -------------------------
     # Shared runners
     # -------------------------
@@ -309,7 +264,7 @@ class FormulaTestBase(unittest.TestCase, ABC):
         rng = random.Random(seed)
 
         for i in range(formula_trials):
-            clauses, variables = self.random_clauses(
+            dnf, variables = random_dnf(
                 rng,
                 variable_count=variable_count,
                 clause_count=clause_count,
@@ -324,7 +279,7 @@ class FormulaTestBase(unittest.TestCase, ABC):
 
                 with self.subTest(case=case_name, formula_trial=i, env_trial=j, seed=seed):
                     self.run_formula_case(
-                        clauses,
+                        dnf.clauses,
                         env,
                         seed=seed,
                         trial=(i, j),

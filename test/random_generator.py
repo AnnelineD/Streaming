@@ -1,7 +1,14 @@
+import string
 from random import random
 
+from src.clause import Clause, DNF
 from src.expr import Var
 
+
+def generate_var_names(n):
+    assert n <= 26  # limited letters in the alphabet
+    letters = list(string.ascii_lowercase)
+    return letters[:n]
 
 def random_set_env(variables, universe=None, rng=None):
     rng = rng or random
@@ -31,3 +38,27 @@ def rand_expr(rng, names, depth, stop_prob=0.3):
         return left | right
     else:
         return left - right
+
+
+def random_clause(rng, variables, min_pos=1, max_pos=3, min_neg=0, max_neg=2):
+    vars_list = list(variables)
+
+    p_size = rng.randint(min_pos, min(max_pos, len(vars_list)))
+    P = set(rng.sample(vars_list, p_size))
+
+    remaining = [v for v in vars_list if v not in P]
+    max_neg_allowed = min(max_neg, len(remaining))
+    min_neg_allowed = min(min_neg, max_neg_allowed)
+    n_size = rng.randint(min_neg_allowed, max_neg_allowed) if remaining else 0
+    N = set(rng.sample(remaining, n_size))
+
+    return Clause.make(P, N)
+
+
+def random_dnf(rng, *, variable_count=5, clause_count=3, min_pos=1, max_pos=3, min_neg=0, max_neg=2,):
+    variables = generate_var_names(variable_count)
+    clauses = [
+        random_clause(rng, variables, min_pos=min_pos, max_pos=max_pos, min_neg=min_neg, max_neg=max_neg,)
+        for _ in range(clause_count)
+    ]
+    return DNF(clauses), variables

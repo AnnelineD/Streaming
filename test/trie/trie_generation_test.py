@@ -8,6 +8,7 @@ from src.clause import Clause, DNF
 from src.trie.trie import bittrieset
 from src.trie.trie_generation import TrieExecution
 from src.trie.trie_synth import Source, Sink
+from test.random_generator import random_dnf
 
 CASES = [
     {
@@ -204,49 +205,6 @@ class FormulaTestBase(unittest.TestCase, ABC):
         # convert plain sets -> bittrieset
         return {v: bittrieset(*paths) for v, paths in env.items()}
 
-    # -------- random clause generation --------
-
-    def random_clause(self, rng, variables, min_pos=1, max_pos=3, min_neg=0, max_neg=2):
-        vars_list = list(variables)
-
-        # positive side
-        p_size = rng.randint(min_pos, min(max_pos, len(vars_list)))
-        P = set(rng.sample(vars_list, p_size))
-
-        # negative side (disjoint from P)
-        remaining = [v for v in vars_list if v not in P]
-        n_size = rng.randint(min_neg, min(max_neg, len(remaining))) if remaining else 0
-        N = set(rng.sample(remaining, n_size))
-
-        return Clause.make(P, N)
-
-
-    def random_clauses(
-        self,
-        rng,
-        *,
-        variable_count=5,
-        clause_count=3,
-        min_pos=1,
-        max_pos=3,
-        min_neg=0,
-        max_neg=2,
-    ):
-        variables = [chr(ord("a") + i) for i in range(variable_count)]
-
-        clauses = [
-            self.random_clause(
-                rng,
-                variables,
-                min_pos=min_pos,
-                max_pos=max_pos,
-                min_neg=min_neg,
-                max_neg=max_neg,
-            )
-            for _ in range(clause_count)
-        ]
-
-        return clauses, variables
     # -------- runners --------
 
     @abstractmethod
@@ -305,7 +263,7 @@ class FormulaTestBase(unittest.TestCase, ABC):
         rng = random.Random(seed)
 
         for i in range(formula_trials):
-            clauses, variables = self.random_clauses(
+            dnf, variables = random_dnf(
                 rng,
                 variable_count=variable_count,
                 clause_count=clause_count,
@@ -464,7 +422,7 @@ class TestStateMachineMultipleGeneration(FormulaTestBase):
         all_clauses = []
 
         for _ in range(formula_count):
-            clauses, _ = self.random_clauses(
+            dnf, _ = random_dnf(
                 rng,
                 variable_count=variable_count,
                 clause_count=clause_count,
@@ -473,8 +431,8 @@ class TestStateMachineMultipleGeneration(FormulaTestBase):
                 min_neg=min_neg,
                 max_neg=max_neg,
             )
-            formulas.append(DNF(clauses))
-            all_clauses.extend(clauses)
+            formulas.append(dnf)
+            all_clauses.extend(dnf.clauses)
 
         return formulas, all_clauses, variables
 
