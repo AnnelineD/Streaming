@@ -7,7 +7,7 @@ from src.normalize import normalize
 from src.clause import DNF
 from src.set.set_generation import graph_generation
 from src.set.synth import Source, Sink
-from test.random_generator import rand_expr, random_env
+from test.random_generator import rand_expr, random_set_env
 
 def generate_formulas(
     n,
@@ -83,7 +83,7 @@ class MyTestCase(unittest.TestCase):
 
             formula = normalize(expr)
             for j in range(env_trials):
-                env = random_env(names, rng=rng)
+                env = random_set_env(names, rng=rng)
                 wanted = expr.eval(env)
 
                 with self.subTest(case=case_name, formula_trial=i, env_trial=j, seed=seed):

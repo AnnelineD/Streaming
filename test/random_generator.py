@@ -3,7 +3,7 @@ from random import random
 from src.expr import Var
 
 
-def random_env(variables, universe=None, rng=None):
+def random_set_env(variables, universe=None, rng=None):
     rng = rng or random
     universe = universe or tuple("123456789ABCDEF")
 

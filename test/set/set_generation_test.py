@@ -9,6 +9,8 @@ from src.clause import DNF, Clause
 from src.set.set_generation import graph_generation #, naive
 from src.set.synth import Sink, Source, Graph
 
+from test.random_generator import random_set_env
+
 
 CASES = [
     {
@@ -196,18 +198,6 @@ class FormulaTestBase(unittest.TestCase, ABC):
             ),
         )
 
-    # -------------------------
-    # Random env helpers
-    # -------------------------
-
-    def random_env(self, variables, universe=None, rng=None):
-        rng = rng or random
-        universe = universe or tuple("123456789ABCDEF")
-
-        return {
-            v: set(rng.sample(universe, rng.randint(0, len(universe))))
-            for v in variables
-        }
 
     # -------------------------
     # Random clause helpers
@@ -289,7 +279,7 @@ class FormulaTestBase(unittest.TestCase, ABC):
         rng = random.Random(seed)
 
         for i in range(trials):
-            env = self.random_env(variables, rng=rng)
+            env = random_set_env(variables, rng=rng)
 
             with self.subTest(case=case_name, i=i, seed=seed, env=self.format_env(env)):
                 self.run_formula_case(
@@ -330,7 +320,7 @@ class FormulaTestBase(unittest.TestCase, ABC):
             )
 
             for j in range(env_trials):
-                env = self.random_env(variables, rng=rng)
+                env = random_set_env(variables, rng=rng)
 
                 with self.subTest(case=case_name, formula_trial=i, env_trial=j, seed=seed):
                     self.run_formula_case(
@@ -619,7 +609,6 @@ class TestGraphGeneration2(FormulaTestBase):
             variable_count=6,
             clause_count=4,
         )
-
 
 if __name__ == "__main__":
     unittest.main()
