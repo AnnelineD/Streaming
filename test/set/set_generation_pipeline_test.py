@@ -4,24 +4,10 @@ from contextlib import redirect_stdout
 from io import StringIO
 
 from src.normalize import normalize
-from src.clause import DNF
 from src.set.set_generation import graph_generation
 from src.set.synth import Source, Sink
 from test.random_generator import rand_expr, random_set_env
 
-def generate_formulas(
-    n,
-    *,
-    variables=("a", "b", "c", "d"),
-    depth=3,
-    seed=0,
-):
-    rng = random.Random(seed)
-
-    return [
-        rand_expr(rng, variables, depth)
-        for _ in range(n)
-    ]
 
 class MyTestCase(unittest.TestCase):
     def run_formula_case(
